@@ -24,6 +24,7 @@
  *     2  -  -        -  -  -         -  2  -        -  -  -
  */
 using namespace std;
+
 const uint16_t layers=2;
 const uint16_t width=800;
 const double lifetime=1;
@@ -99,10 +100,23 @@ struct pos{
     uint16_t x; uint16_t y; uint16_t z;
 };
 
-/*pos pos_in_dir(pos p0 ,byte d){
-    pos p1=pos(p)
-    if(d<3)
-}*/
+
+void save_as_csv(const std::vector<std::vector<uint32_t>>& data, const std::string& filename) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open file " << filename << " for writing!" << std::endl;
+        return;
+    }
+    for (const auto& row : data) {
+        for (size_t col = 0; col < row.size(); ++col) {
+            file << row[col]; // Write the value
+            if (col < row.size() - 1) file << ","; // Add a comma except for the last element
+        }
+        file << "\n"; // End the row
+    }
+    file.close();
+    std::cout << "CSV saved to " << filename << std::endl;
+}
 
 double rates[width][width][layers][13];
 vector<vector<vector<double>>> energies(width,vector<vector<double>>(width,vector<double>(layers,0)));
@@ -120,7 +134,6 @@ double dprod(signed char v1[], signed char v2[]){
 }
 
 void setQDs(){
-
     srand((unsigned) time(NULL));
     double energy_mu=2.255; //1240/.55
     double energy_sigma=.030;
@@ -128,15 +141,15 @@ void setQDs(){
     double phi=0;
     signed char dipoles[width][width][layers][3]={}; // unit vector of the dipole * 100
 
-    random_device rd;  // Seed
-    mt19937 generator(rd());  // Random number generator
+    random_device rd_e;  // Seed
+    mt19937 generator_e(rd_e());  // Random number generator
     normal_distribution<double> e_dist(energy_mu, energy_sigma);
 
     // Fill the 3D array with random values from the normal distribution
     for (int i = 0; i < width; ++i) {
         for (int j = 0; j < width; ++j) {
             for (int k = 0; k < layers; ++k) {
-                energies[i][j][k] = e_dist(generator);
+                energies[i][j][k] = e_dist(generator_e);
                 theta = 3.14159*(rand() % 360)/180;
                 phi = 3.14159*(rand() % 360)/180;
                 dipoles[i][j][k][0]=(signed char)(100*cos(theta)*sin(phi));
@@ -156,7 +169,7 @@ void setQDs(){
     double d_da[3]={};
     double d_da_mag;
     for (uint16_t z=0; z<layers; z++) {
-        uint16_t dmin = (z<layers-1)?3:0;
+        uint16_t dmin = (z<layers-1)?0:3;
         uint16_t dmax = (z>0)?12:9;
         for (uint16_t x=0; x<width; x++){
             for (uint16_t y=0; y<width; y++) {
@@ -175,11 +188,11 @@ void setQDs(){
                         kappa= dprod(dipoles[x][y][z],dipoles[p1.x][p1.y][p1.z])-3* dprod(dipoles[x][y][z],d_da)*dprod(dipoles[p1.x][p1.y][p1.z],d_da)/d_da_mag;
                         rates[x][y][z][d]=FRET_scaling*kappa*kappa*exp(-pow(E_d-E_a-delta_ss,2)/FRET_denom)/pow(.5*(E_d+E_a-delta_ss),4);
                         rates[x][y][z][12]+=rates[x][y][z][d];
-                        cout<<"\n"; p0.print(); cout<<", "<<E_d<<" -> "; p1.print(); cout<<", "<<E_a<<" | rate = "<<rates[x][y][z][d]<<", kappa = "<<kappa;
+                        //cout<<"\n"; p0.print(); cout<<", "<<E_d<<" -> "; p1.print(); cout<<", "<<E_a<<" | rate = "<<rates[x][y][z][d]<<", kappa = "<<kappa;
                         //cout<<" | d_da = ("<<d_da[0]<<","<<d_da[1]<<","<<d_da[2]<<") ";
                     }
                 }
-                cout<<"("<<x<<","<<y<<","<<z<<") E = "<<E_d<<", total rate = "<<rates[x][y][z][12]<<"\n";
+                //cout<<"("<<x<<","<<y<<","<<z<<") E = "<<E_d<<", total rate = "<<rates[x][y][z][12]<<"\n";
             }
         }
     }
@@ -190,19 +203,74 @@ struct emission {
     double energy; double time;
 };
 
+vector<vector<uint32_t>> apd;
+
+
+uint16_t energy_resolution=200; // number of pixels on energy axis
+double energy_min=2.1;
+double energy_span=.3;
+double energy_step=energy_span/energy_resolution;
+
+uint16_t time_resolution=200; // number of pixels on time axis
+double time_max=5;
+double time_step=time_max/time_resolution;
+
+double base_rate = 1/lifetime;
+random_device rd;
+mt19937 rand_gen (rd ());
+exponential_distribution<> exp_dist(base_rate);
+
+void sim_particle(pos p, double t){
+    double transfer_time=exp_dist(rd)/rates[p.x][p.y][p.z][12]; //should be base_rate/rates[x][y][z], but rates[][][] is already normalized by base rate
+    double trans_rand=((double)rand()/(double)RAND_MAX)*rates[p.x][p.y][p.z][12];// decides how it decays, either FRET or radiative
+    //cout<<trans_rand<<"\n";
+    if(trans_rand<1){
+        uint16_t e_bin=(uint16_t)((energies[p.x][p.y][p.z]-energy_min)/energy_step);
+        uint16_t t_bin=(uint16_t)((t+transfer_time)/time_step);
+        if(e_bin<energy_resolution && t_bin<time_resolution){
+            //cout<<"emission at "<<", "<<t_bin<<"\n";
+            //cout<<"emission at "<<energies[p.x][p.y][p.z]<<"("<<e_bin<<"), "<<t_bin<<"\n";
+
+            apd[t_bin][e_bin]++;
+        }else{
+           //cout<<e_bin<<", "<<t_bin<<" out of range\n";
+        }
+        return;
+    }else{
+        double cumul_rate=1;
+        uint16_t d=0;
+        for (; d<12; d++){
+            cumul_rate += rates[p.x][p.y][p.z][d];
+            if(trans_rand<cumul_rate){
+                break;
+            }
+        }
+        /*cout<<"transferred to direction "<<d<<"(rand = "<<trans_rand<<"/"<<rates[p.x][p.y][p.z][12]<<")\n";
+        for (uint32_t i=0;i<12;i++){
+            cout<<i<<"-"<<rates[p.x][p.y][p.z][i]<<" ";
+        }
+        cout<<"\n";*/
+
+        p.go_in_direction(d);
+        sim_particle(p,t+transfer_time);
+    }
+}
+
+
 int main(/*int argc=0, char** argv=nullptr*/){
     setQDs();
+    srand((unsigned) time(NULL));
 
-    /*double energy_min=2.1;
-    double energy_max=2.4;
-    uint16_t energy_res=300; // number of pixels on energy axis
-    double time_max=2;
-    uint16_t time_resolution=200; // number of pixels on time axis
-    double time_step=time_max/time_res;
 
-    uint32_t apd[time_resolution][energy_res];
-    for(uint32_t i=0; i<)*/
-
+    apd=vector<vector<uint32_t>>(time_resolution,vector<uint32_t>(energy_resolution));
+    pos p(0,0,0);
+    int w_6=width/6;
+    int w_23=width*2/3;
+    for(uint32_t i=0; i<1000000; i++){
+        p=pos((uint16_t)(w_6+rand()%w_23),(uint16_t)(w_6+rand()%w_23),(uint16_t)(rand()%layers));
+        sim_particle(p,0);
+    }
+    save_as_csv(apd, "output.csv");
     return 0;
 }
 /*
