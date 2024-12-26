@@ -198,13 +198,7 @@ void setQDs(){
     }
 }
 
-struct emission {
-    emission(double e, double t) : energy{e}, time{t} {}
-    double energy; double time;
-};
-
 vector<vector<uint32_t>> apd;
-
 
 uint16_t energy_resolution=200; // number of pixels on energy axis
 double energy_min=2.1;
@@ -273,26 +267,3 @@ int main(/*int argc=0, char** argv=nullptr*/){
     save_as_csv(apd, "output.csv");
     return 0;
 }
-/*
-     * pos pos0=pos(20,20,20);
-    pos pos1=pos(pos0);
-    stack<uint16_t> directions;
-    uint16_t d;
-    cout<<"\n";
-    for (int i=0; i<20; i++){
-        d=(uint16_t)(rand()%12);
-        pos1=pos(pos0,d);
-        directions.push(d);
-        pos0.print(); cout<<" -> ";
-        pos1.print(); cout<<"\n";
-        pos0=pos1;
-    }
-    while(!directions.empty()){
-        d=rev_dir[directions.top()];
-        pos1=pos(pos0,d);
-        pos0.print(); cout<<" -> ";
-        pos1.print(); cout<<"\n";
-        pos0=pos1;
-        directions.pop();
-    }
-    pos0.print();*/
