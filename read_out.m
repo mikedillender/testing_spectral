@@ -1,46 +1,68 @@
 clear; close all;
-% Parameters
-xBinSize = 0.3/200; % Size of each bin along the x-axis
-yBinSize = 5/200; % Size of each bin along the y-axis
-csvFile = 'output.csv'; % Your CSV file
+xBinSize = 0.25/200; % Size of each bin along the x-axis
+yBinSize = 8/300; % Size of each bin along the y-axis
 
-% Read the CSV file
-data = csvread(csvFile);
+csvFile = 'output_3L_d100_C23.csv'; % Your CSV file
+data1 = csvread(csvFile);
 
 % Compute the x and y axis ranges
-[nRows, nCols] = size(data); % Get the dimensions of the image
-x = 2.1+(0:nCols-1) * xBinSize; % x-axis values
+[nRows, nCols] = size(data1); % Get the dimensions of the image
+x = 2.15+(0:nCols-1) * xBinSize; % x-axis values
 y = (0:nRows-1) * yBinSize; % y-axis values
 
 % Display the image with specified axes
-imshow(data, [], 'XData', x, 'YData', y);
-%colormap(gray); % Apply grayscale colormap
-colorbar; % Optional: Display a color scale
-axis on; % Turn on the axes
-hold;
-%
-% MEDIANS
+subplot(1,2,1);
+imshow(data1, [], 'XData', x, 'YData', y);
+colorbar; axis on; hold on;
+
+%% medians 1
 
 % Calculate the median x position for each row
-[nRows, nCols] = size(data);
+[nRows, nCols] = size(data1);
 medianXIndices = zeros(nRows, 1); % Preallocate array for median x indices
 
 for i = 1:nRows
-    % Find the column index corresponding to the median of the row
-    medianXIndices(i) = find(cumsum(data(i, :)) >= sum(data(i, :)) / 2, 1);
+    medianXIndices(i) = find(cumsum(data1(i, :)) >= sum(data1(i, :)) / 2, 1);
 end
 
 % Prepare the x and y coordinates for the line
-xCoords = 2.1+(medianXIndices - 1) * xBinSize; % Convert indices to x-axis values
-yCoords = y; % Y-axis values for each row
+xCoords = 2.15+(medianXIndices - 1) * xBinSize; % Convert indices to x-axis values
 
 % Plot the line on top of the image
-plot(xCoords, yCoords, 'r', 'LineWidth', 2); % Red line with thickness 2
+plot(xCoords, y, 'r', 'LineWidth', 2); % Red line with thickness 2
+title("2 Full Layers");
 
 
 ylabel('time (ns)');
 xlabel('energy (eV)');
-%title('Grayscale Image with Specified Axes');
-daspect([4 80 1]);
+daspect([4 100 1]);
 axis tight;
+xlim([2.18 2.33]);
+set(gcf, 'Position', [100, 100, 1000, 800]); % [x, y, width, height]
+
+%%  part 2
+csvFile2 = 'output2_3L_d100_C23.csv'; % Your CSV file
+data2 = csvread(csvFile2);
+subplot(1,2,2);
+
+medianXIndices2 = zeros(nRows, 1); % Preallocate array for median x indices
+for i = 1:nRows
+    medianXIndices2(i) = find(cumsum(data2(i, :)) >= sum(data2(i, :)) / 2, 1);
+end
+xCoords2 = 2.15+(medianXIndices2 - 1) * xBinSize; % Convert indices to x-axis values
+subplot(1,2,2);
+
+imshow(data2, [], 'XData', x, 'YData', y);
+colorbar; axis on; hold on;
+plot(xCoords2, y, 'r', 'LineWidth', 2); % Red line with thickness 2
+plot(xCoords, y, 'g', 'LineWidth', 1); % Red line with thickness 2
+legend("with islands",'without islands',Location='southeast')
+
+ylabel('time (ns)');
+xlabel('energy (eV)');
+daspect([4 100 1]);
+axis tight;
+xlim([2.18 2.33]);
+
+title("2 Full Layers + 20% 3rd");
 set(gcf, 'Position', [100, 100, 1000, 800]); % [x, y, width, height]

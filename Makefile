@@ -28,7 +28,7 @@ UNIQNAME    = dillemic
 IDENTIFIER  = EEC50281EEC50281EEC50281EEC50281EEC50281
 
 # Change 'executable' to match the command name given in the project spec.
-EXECUTABLE  = executable
+EXECUTABLE  = test
 
 # The following line looks for a project's main() in files named project*.cpp,
 # executable.cpp (substituted from EXECUTABLE above), or main.cpp

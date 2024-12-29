@@ -25,9 +25,13 @@
  */
 using namespace std;
 
-const uint16_t layers=2;
-const uint16_t width=800;
+const uint16_t layers=3;
+const uint16_t width=300;
 const double lifetime=1;
+double FRET_denom= 4*(.023*.023);// = 4 sigma^2
+double delta_ss=.038;
+double FRET_scaling = 23; // (C/dij^6)
+double top_density=1;
                           //0 1  2  3 4 5 6 7 8 9 10 11
 array<uint16_t,12> rev_dir={9,10,11,8,7,6,5,4,3,0,1, 2};
 
@@ -119,6 +123,7 @@ void save_as_csv(const std::vector<std::vector<uint32_t>>& data, const std::stri
 }
 
 double rates[width][width][layers][13];
+bool absent[width][width][layers];
 vector<vector<vector<double>>> energies(width,vector<vector<double>>(width,vector<double>(layers,0)));
 
 
@@ -155,12 +160,15 @@ void setQDs(){
                 dipoles[i][j][k][0]=(signed char)(100*cos(theta)*sin(phi));
                 dipoles[i][j][k][1]=(signed char)(100*sin(theta)*sin(phi));
                 dipoles[i][j][k][2]=(signed char)(100*cos(phi));
+                if(k==layers-1 && top_density<1){
+                    absent[i][j][k] = 1000*top_density<(rand()%1000); //absent if rand < % absent
+                } else{
+                    absent[i][j][k] = false;
+                }
             }
         }
     }
-    double FRET_denom= 4*(.027*.027);// = 4 sigma^2
-    double delta_ss=.038;
-    double FRET_scaling = 63; // (C/dij^6)
+
     double kappa;
     double E_a;
     double E_d;
@@ -173,6 +181,7 @@ void setQDs(){
         uint16_t dmax = (z>0)?12:9;
         for (uint16_t x=0; x<width; x++){
             for (uint16_t y=0; y<width; y++) {
+                if(absent[x][y][z]){continue;}
                 rates[x][y][z][12]=1;
                 pos p0=pos(x,y,z);
                 p0.get_real_pos(r_d);
@@ -181,6 +190,7 @@ void setQDs(){
                 for (uint16_t d=dmin; d<dmax; d++){
                     p1=pos(p0,d);
                     if(p1.x<width && p1.y<width &&p1.z<layers){
+                        if(absent[p1.x][p1.y][p1.z]){continue;}
                         p1.get_real_pos(r_a);
                         d_da[0]=r_a[0]-r_d[0]; d_da[1]=r_a[1]-r_d[1]; d_da[2]=r_a[2]-r_d[2];
                         d_da_mag=d_da[0]*d_da[0]+d_da[1]*d_da[1]+d_da[2]*d_da[2];
@@ -201,12 +211,12 @@ void setQDs(){
 vector<vector<uint32_t>> apd;
 
 uint16_t energy_resolution=200; // number of pixels on energy axis
-double energy_min=2.1;
-double energy_span=.3;
+double energy_min=2.15;
+double energy_span=.25;
 double energy_step=energy_span/energy_resolution;
 
-uint16_t time_resolution=200; // number of pixels on time axis
-double time_max=5;
+uint16_t time_resolution=300; // number of pixels on time axis
+double time_max=8;
 double time_step=time_max/time_resolution;
 
 double base_rate = 1/lifetime;
@@ -258,12 +268,15 @@ int main(/*int argc=0, char** argv=nullptr*/){
 
     apd=vector<vector<uint32_t>>(time_resolution,vector<uint32_t>(energy_resolution));
     pos p(0,0,0);
-    int w_6=width/6;
-    int w_23=width*2/3;
-    for(uint32_t i=0; i<1000000; i++){
-        p=pos((uint16_t)(w_6+rand()%w_23),(uint16_t)(w_6+rand()%w_23),(uint16_t)(rand()%layers));
+    int w_edge=15;
+    if(width<w_edge*2+2){cout<<"increase width\n"; return 0;}
+    int w_mid=width-2*w_edge;
+    for(uint32_t i=0; i<3000000; i++){
+        p=pos((uint16_t)(w_edge+rand()%w_mid),(uint16_t)(w_edge+rand()%w_mid),(uint16_t)(rand()%layers));
+        if(absent[p.x][p.y][p.z]){i--;continue;}
         sim_particle(p,0);
     }
-    save_as_csv(apd, "output.csv");
+    string name="output2_"+to_string(layers)+"L_d"+to_string(int(round(top_density*100)))+"_C"+to_string(int(FRET_scaling))+".csv";
+    save_as_csv(apd, name);
     return 0;
 }
