@@ -35,11 +35,11 @@ title("2 Full Layers",'FontSize',24);
 
 ylabel('time (ns)','FontSize',20);
 xlabel('energy (eV)','FontSize',20);
-daspect([4 200 1]);
+daspect([4 160 1]);
 axis tight;
 ax=gca; ax.FontSize=18;
 
-ylim([0,5]);
+%ylim([0,6]);
 xlim([2.18 2.33]);
 set(gcf, 'Position', [100, 100, 1000, 800]); % [x, y, width, height]
 
@@ -63,10 +63,10 @@ legend("2.2 layers",'2 layers',Location='southeast',fontsize=18);
 
 ylabel('time (ns)','FontSize',20);
 xlabel('energy (eV)','FontSize',20);
-daspect([4 200 1]);
+daspect([4 160 1]);
 axis tight;
 xlim([2.18 2.33]);
-ylim([0,5]);
+%ylim([0,6]);
 
 title("2 Full Layers + 20% 3rd",'FontSize',24);
 ax=gca; ax.FontSize=18;
