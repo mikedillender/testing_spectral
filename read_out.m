@@ -2,7 +2,7 @@ clear; close all;
 xBinSize = 0.25/200; % Size of each bin along the x-axis
 yBinSize = 8/300; % Size of each bin along the y-axis
 
-csvFile = 'output_2L_d100_C23.csv'; % Your CSV file
+csvFile = 'APD_70_2-277_C23.csv'; 
 data1 = csvread(csvFile);
 
 % Compute the x and y axis ranges
@@ -44,7 +44,7 @@ xlim([2.18 2.33]);
 set(gcf, 'Position', [100, 100, 1000, 800]); % [x, y, width, height]
 
 %%  part 2
-csvFile2 = 'output_3L_d20_C23.csv'; % Your CSV file
+csvFile2 = 'APD_95_2-218_C23.csv'; 
 data2 = csvread(csvFile2);
 subplot(1,2,2);
 

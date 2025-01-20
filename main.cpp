@@ -26,7 +26,6 @@
  */
 using namespace std;
 
-const uint16_t layers=3;
 const uint16_t width=300;
 const double lifetime=1;
 double FRET_denom= 4*(.023*.023);// = 4 sigma^2
@@ -34,6 +33,7 @@ double delta_ss=.038;
 double FRET_scaling = 23; // (C/dij^6)
 double top_density=1;
 
+double num_layers=0;
 
 void save_as_csv(const std::vector<std::vector<uint32_t>>& data, const std::string& filename) {
     std::ofstream file(filename);
@@ -112,6 +112,7 @@ void setQDs(){
         r_d[0]=qdx[id]; r_d[1]=qdy[id]; r_d[2]=qdz[id];
         mu_d[0]=dix[id]; mu_d[1]=dix[id]; mu_d[2]=dix[id];
         for(uint32_t j=0;j<12;j++){
+            if(j>=nns[id].size()){/*cout<<"not 12 nns\n"; */j=12; continue;}
             uint32_t ia=nns[id][j];
             E_a=energies[ia];
             r_a[0]=qdx[ia]; r_a[1]=qdy[ia]; r_a[2]=qdz[ia];
@@ -125,41 +126,13 @@ void setQDs(){
             rates_i[j]=FRET_scaling*kappa*kappa*exp(-pow(E_d-E_a-delta_ss,2)/FRET_denom)/pow(.5*(E_d+E_a-delta_ss),4);
             rates_i[j]=rates_i[j]*pow(4/d_da_mag,3);
             rates_i[12]+=rates_i[j];
-            cout<<id<<" ("<<E_d<<") -> "<<ia<<" ("<<E_a<<") | rate = "<<rates_i[j]<<", kappa = "<<kappa<<", d = "<<d_da_mag<<"\n";
+            //cout<<id<<" ("<<E_d<<") -> "<<ia<<" ("<<E_a<<") | rate = "<<rates_i[j]<<", kappa = "<<kappa<<", d = "<<d_da_mag<<"\n";
             //cout<<" | d_da = ("<<d_da[0]<<","<<d_da[1]<<","<<d_da[2]<<") ";
         }
         rates.push_back(rates_i);
         //cout<<"("<<x<<","<<y<<","<<z<<") E = "<<E_d<<", total rate = "<<rates[x][y][z][12]<<"\n";
     }
 
-    /*for (uint16_t z=0; z<layers; z++) {
-        uint16_t dmin = (z<layers-1)?0:3;
-        uint16_t dmax = (z>0)?12:9;
-        for (uint16_t x=0; x<width; x++){
-            for (uint16_t y=0; y<width; y++) {
-                if(absent[x][y][z]){continue;}
-                rates[x][y][z][12]=1;
-                pos p0=pos(x,y,z);
-                p0.get_real_pos(r_d);
-                pos p1=pos(p0);
-                E_d=energies[x][y][z];
-                for (uint16_t d=dmin; d<dmax; d++){
-                    p1=pos(p0,d);
-                    if(p1.x<width && p1.y<width &&p1.z<layers){
-                        if(absent[p1.x][p1.y][p1.z]){continue;}
-                        p1.get_real_pos(r_a);
-                        d_da[0]=r_a[0]-r_d[0]; d_da[1]=r_a[1]-r_d[1]; d_da[2]=r_a[2]-r_d[2];
-                        d_da_mag=d_da[0]*d_da[0]+d_da[1]*d_da[1]+d_da[2]*d_da[2];
-                        E_a=energies[p1.x][p1.y][p1.z];
-                        kappa= dprod(dipoles[x][y][z],dipoles[p1.x][p1.y][p1.z])-3* dprod(dipoles[x][y][z],d_da)*dprod(dipoles[p1.x][p1.y][p1.z],d_da)/d_da_mag;
-                        rates[x][y][z][d]=FRET_scaling*kappa*kappa*exp(-pow(E_d-E_a-delta_ss,2)/FRET_denom)/pow(.5*(E_d+E_a-delta_ss),4);
-                        rates[x][y][z][12]+=rates[x][y][z][d];
-
-                    }
-                }
-            }
-        }
-    }*/
 }
 
 vector<vector<uint32_t>> apd;
@@ -215,13 +188,17 @@ void sim_particle(uint32_t i, double t){
 }
 
 
-void readCSV(const string& filename, vector<double>& x, vector<double>& y, vector<double>& z) {
+void readCSV(const string& filename, vector<double>& x, vector<double>& y, vector<double>& z, bool cut=false, double cut_above=0) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         std::cerr << "Error: Could not open file " << filename << std::endl;
         exit(1);
         return;
     }
+
+    vector<bool> keep;
+    vector<uint32_t> new_ind;
+    uint32_t kept=0;
 
     std::string line;
     double maxx=0;
@@ -258,22 +235,66 @@ void readCSV(const string& filename, vector<double>& x, vector<double>& y, vecto
             nearest.push_back(static_cast<uint32_t>(std::stoul(token)));
         }
 
+
         // Add to vectors
-        x.push_back(x_val);
-        y.push_back(y_val);
-        z.push_back(z_val);
         nns.push_back(nearest);
+        if(cut){
+            new_ind.push_back(kept);
+            if(z_val<cut_above){
+                x.push_back(x_val);
+                y.push_back(y_val);
+                z.push_back(z_val);
+                kept++;
+                keep.push_back(true);
+                num_layers=num_layers+z_val;
+            } else{
+                keep.push_back(false);
+            }
+        } else{
+            x.push_back(x_val);
+            y.push_back(y_val);
+            z.push_back(z_val);
+            num_layers=num_layers+z_val;
+        }
         Np++;
+
+    }
+
+    if(cut){
+        for(uint32_t i=Np-1; i<Np; i--){
+            if(keep[i]){
+                for(size_t j=nns[i].size()-1; j<12; j--){
+                    if(!keep[nns[i][j]]){
+                        nns[i].erase(nns[i].begin()+j);
+                    } else{
+                        nns[i][j]=new_ind[nns[i][j]];
+                    }
+                }
+            } else{
+                nns.erase(nns.begin()+i);
+            }
+        }
+        for(uint32_t i=0; i<100; i++) {
+            cout<<i<<" : "<<x[i]<<", "<<y[i]<<","<<z[i]<<" : ";
+            for(uint32_t j : nns[i]){
+                cout<<j<<", ";
+            }
+            cout<<"\n";
+        }
+        cout<<" kept "<<kept<<" \n";
+        Np=kept;
     }
     Lbox=(int32_t)maxx+1;
-
+    num_layers=num_layers+Lbox*Np;
+    num_layers=(num_layers/Np);
+    cout<<"num layers = "<<num_layers<<"\n";
     file.close();
 }
 
 int main(/*int argc=0, char** argv=nullptr*/){
     srand((unsigned) time(NULL));
-    std::string filename = "dots_N2880_w30.csv"; // Replace with your CSV file path
-    readCSV(filename, qdx, qdy, qdz);
+    std::string filename = "dots_z1998_p0_w90_g2_c999.csv"; // Replace with your CSV file path
+    readCSV(filename, qdx, qdy, qdz, true,-90+3);
     cout<<" box size is "<<Lbox<<" \n";
     setQDs();
 
@@ -289,9 +310,11 @@ int main(/*int argc=0, char** argv=nullptr*/){
 
     apd=vector<vector<uint32_t>>(time_resolution,vector<uint32_t>(energy_resolution));
     //pos p(0,0,0);
-    int w_edge=5;
+    int w_edge=8;
     if(width<w_edge*2+2){cout<<"increase width\n"; return 0;}
-    for(uint32_t iter=0; iter<1000; iter++){
+    cout<<"num layers = "<<num_layers<<"\n";
+
+    for(uint32_t iter=0; iter<1000000; iter++){
         uint32_t i = (uint32_t)(rand()%Np);
         if(abs(qdx[i])+w_edge>Lbox){iter--; continue;}
         if(abs(qdy[i])+w_edge>Lbox){iter--; continue;}
@@ -299,7 +322,7 @@ int main(/*int argc=0, char** argv=nullptr*/){
         //if(absent[p.x][p.y][p.z]){i--;continue;}
         sim_particle(i,0);
     }
-    string name="APD_"+to_string(layers)+"L_d"+to_string(int(round(top_density*100)))+"_C"+to_string(int(FRET_scaling))+".csv";
+    string name="APD_95_L_d"+to_string(int(round(num_layers*100)))+"_C"+to_string(int(FRET_scaling))+".csv";
     save_as_csv(apd, name);
     return 0;
 }
