@@ -30,10 +30,11 @@ const uint16_t width=300;
 const double lifetime=1;
 double FRET_denom= 4*(.023*.023);// = 4 sigma^2
 double delta_ss=.038;
-double FRET_scaling = 23; // (C/dij^6)
+double FRET_scaling = 260; // (C/dij^6)
 double top_density=1;
 
 double num_layers=0;
+uint32_t hops=0;
 
 void save_as_csv(const std::vector<std::vector<uint32_t>>& data, const std::string& filename) {
     std::ofstream file(filename);
@@ -184,6 +185,7 @@ void sim_particle(uint32_t i, double t){
 
 
         sim_particle(nns[i][d],t+transfer_time);
+        hops++;
     }
 }
 
@@ -215,8 +217,8 @@ void readCSV(const string& filename, vector<double>& x, vector<double>& y, vecto
             continue; // Skip if incomplete line
         }
 
-        if(x_val>maxx){
-            maxx=x_val;
+        if(abs(x_val)>maxx){
+            maxx=abs(x_val);
         }
         // Parse y
         if (std::getline(ss, token, ',')) {
@@ -263,7 +265,7 @@ void readCSV(const string& filename, vector<double>& x, vector<double>& y, vecto
     if(cut){
         for(uint32_t i=Np-1; i<Np; i--){
             if(keep[i]){
-                for(size_t j=nns[i].size()-1; j<12; j--){
+                for(size_t j=nns[i].size()-1; j<20; j--){
                     if(!keep[nns[i][j]]){
                         nns[i].erase(nns[i].begin()+j);
                     } else{
@@ -281,20 +283,20 @@ void readCSV(const string& filename, vector<double>& x, vector<double>& y, vecto
             }
             cout<<"\n";
         }
-        cout<<" kept "<<kept<<" \n";
+        cout<<" kept "<<kept<<"/"<<Np<<" \n";
         Np=kept;
     }
-    Lbox=(int32_t)maxx+1;
+    Lbox=(int32_t)ceil(maxx);
     num_layers=num_layers+Lbox*Np;
     num_layers=(num_layers/Np);
     cout<<"num layers = "<<num_layers<<"\n";
+    cout<<"Np = "<<Np<<"\n";
     file.close();
 }
-
 int main(/*int argc=0, char** argv=nullptr*/){
     srand((unsigned) time(NULL));
-    std::string filename = "dots_z1998_p0_w90_g2_c999.csv"; // Replace with your CSV file path
-    readCSV(filename, qdx, qdy, qdz, true,-90+3);
+    std::string filename = "dots_z2044_p825_w180_g2_c990.csv"; // Replace with your CSV file path
+    readCSV(filename, qdx, qdy, qdz, true,-180+3);
     cout<<" box size is "<<Lbox<<" \n";
     setQDs();
 
@@ -310,11 +312,11 @@ int main(/*int argc=0, char** argv=nullptr*/){
 
     apd=vector<vector<uint32_t>>(time_resolution,vector<uint32_t>(energy_resolution));
     //pos p(0,0,0);
-    int w_edge=8;
+    int w_edge=10;
     if(width<w_edge*2+2){cout<<"increase width\n"; return 0;}
     cout<<"num layers = "<<num_layers<<"\n";
-
-    for(uint32_t iter=0; iter<1000000; iter++){
+    uint32_t num_iters=3000000;
+    for(uint32_t iter=0; iter<num_iters; iter++){
         uint32_t i = (uint32_t)(rand()%Np);
         if(abs(qdx[i])+w_edge>Lbox){iter--; continue;}
         if(abs(qdy[i])+w_edge>Lbox){iter--; continue;}
@@ -322,7 +324,9 @@ int main(/*int argc=0, char** argv=nullptr*/){
         //if(absent[p.x][p.y][p.z]){i--;continue;}
         sim_particle(i,0);
     }
-    string name="APD_95_L_d"+to_string(int(round(num_layers*100)))+"_C"+to_string(int(FRET_scaling))+".csv";
+    double avg_hops=((double)hops)/num_iters;
+    cout<<"avg hops per excitation : "<<avg_hops<<"\n";
+    string name="APD_L"+to_string(Lbox)+"_d"+to_string(int(round(num_layers*100)))+"_C"+to_string(int(FRET_scaling))+".csv";
     save_as_csv(apd, name);
     return 0;
 }

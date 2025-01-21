@@ -2,7 +2,7 @@ clear; close all;
 xBinSize = 0.25/200; % Size of each bin along the x-axis
 yBinSize = 8/300; % Size of each bin along the y-axis
 
-csvFile = 'APD_70_2-277_C23.csv'; 
+csvFile = 'APD_L180_d173_C260a.csv'; 
 data1 = csvread(csvFile);
 
 % Compute the x and y axis ranges
@@ -30,21 +30,21 @@ xCoords = 2.15+(medianXIndices - 1) * xBinSize; % Convert indices to x-axis valu
 
 % Plot the line on top of the image
 plot(xCoords, y, 'r', 'LineWidth', 2); % Red line with thickness 2
-title("2 Full Layers",'FontSize',24);
+title("2 Layers",'FontSize',24);
 
 
-ylabel('time (ns)','FontSize',20);
+ylabel('time (\tau)','FontSize',20);
 xlabel('energy (eV)','FontSize',20);
-daspect([4 200 1]);
+daspect([6 200 1]);
 axis tight;
 ax=gca; ax.FontSize=18;
 
 ylim([0,5]);
 xlim([2.18 2.33]);
-set(gcf, 'Position', [100, 100, 1000, 800]); % [x, y, width, height]
+set(gcf, 'Position', [100, 100, 1000, 600]); % [x, y, width, height]
 
 %%  part 2
-csvFile2 = 'APD_95_2-218_C23.csv'; 
+csvFile2 = 'APD_L180_d204_C260.csv'; 
 data2 = csvread(csvFile2);
 subplot(1,2,2);
 
@@ -59,15 +59,15 @@ imshow(data2, [], 'XData', x, 'YData', y);
 colorbar; axis on; hold on;
 plot(xCoords2, y, 'r', 'LineWidth', 2); % Red line with thickness 2
 plot(xCoords, y, 'g', 'LineWidth', 1); % Red line with thickness 2
-legend("2.2 layers",'2 layers',Location='southeast',fontsize=18);
+legend("2.3",'2',Location='southeast',fontsize=16);
 
-ylabel('time (ns)','FontSize',20);
+ylabel('time (\tau)','FontSize',20);
 xlabel('energy (eV)','FontSize',20);
-daspect([4 200 1]);
+daspect([6 200 1]);
 axis tight;
 xlim([2.18 2.33]);
 ylim([0,5]);
 
-title("2 Full Layers + 20% 3rd",'FontSize',24);
+title("2.3 Layers",'FontSize',24);
 ax=gca; ax.FontSize=18;
-set(gcf, 'Position', [100, 100, 1000, 800]); % [x, y, width, height]
+set(gcf, 'Position', [100, 100, 1000, 600]); % [x, y, width, height]
