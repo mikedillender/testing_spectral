@@ -30,11 +30,17 @@ const uint16_t width=300;
 const double lifetime=1;
 double FRET_denom= 4*(.023*.023);// = 4 sigma^2
 double delta_ss=.038;
-double FRET_scaling = 260; // (C/dij^6)
+double FRET_scaling = 100; // (C/dij^6)
 double top_density=1;
 
 double num_layers=0;
 uint32_t hops=0;
+
+
+uint16_t energy_resolution=200; // number of pixels on energy axis
+double energy_min=2.13;
+double energy_span=0.24;
+double energy_step=energy_span/energy_resolution;
 
 void save_as_csv(const std::vector<std::vector<uint32_t>>& data, const std::string& filename) {
     std::ofstream file(filename);
@@ -61,6 +67,67 @@ uint32_t Np=0;
 uint32_t Lbox=0;
 std::vector<double> qdx, qdy, qdz;
 
+
+void save_dots_as_csv(const std::string& filename) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open file " << filename << " for writing!" << std::endl;
+        return;
+    }
+    int w_edge=5;
+    for (uint32_t i=0; i<Np; i++) {
+        if(abs(qdx[i])+w_edge>Lbox){i++; continue;}
+        if(abs(qdy[i])+w_edge>Lbox){i++; continue;}
+        file<<qdz[i]<<",";
+        file<<energies[i]<<",";
+        for (size_t r = 0; r < 13; ++r) {
+            file << rates[i][r]; // Write the value
+        }
+        file << "\n"; // End the row
+    }
+    file.close();
+    std::cout << "CSV saved to " << filename << std::endl;
+}
+
+void save_energy_rates(const std::string& filename) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open file " << filename << " for writing!" << std::endl;
+        return;
+    }
+
+    uint32_t E_res=100;
+    double en_step=energy_span/E_res;
+    vector<vector<double>> Erates=vector<vector<double>>(E_res,vector<double>(E_res,-.0001));
+    vector<vector<uint32_t>> points=vector<vector<uint32_t>>(E_res,vector<uint32_t>(E_res,0));
+    size_t max_size=12;
+    for (uint32_t i=0; i<Np; i++) {
+        uint32_t ei=(uint32_t)floor((energies[i]-energy_min)/en_step);
+        if(ei>E_res){continue;}
+        size_t num_nns=min(nns[i].size(),max_size);
+        for(size_t nn_i=0; nn_i<num_nns; nn_i++){
+            //if(j>=nns[id].size()){/*cout<<"not 12 nns\n"; */j=12; continue;}
+            uint32_t j=nns[i][nn_i];
+            double d_da=(qdx[i]-qdx[j])*(qdx[i]-qdx[j])+(qdy[i]-qdy[j])*(qdy[i]-qdy[j])+(qdz[i]-qdz[j])*(qdz[i]-qdz[j]);
+            if(d_da<6){continue;}
+            uint32_t ej=(uint32_t)floor((energies[j]-energy_min)/en_step);
+            if(ej>E_res){continue;}
+            Erates[ei][ej]=(Erates[ei][ej]*points[ei][ej]+rates[i][nn_i])/(points[ei][ej]+1);
+            points[ei][ej]++;
+        }
+
+    }
+
+    for (uint32_t i=0; i<E_res; i++) {
+        for (uint32_t j = 0; j <E_res; j++) {
+            file << Erates[i][j]<<","; // Write the value
+        }
+        file << "\n"; // End the row
+    }
+    file.close();
+    std::cout << "CSV saved to " << filename << std::endl;
+}
+
 double dprod(double v1[], double v2[]){
     return v1[0]*v2[0]+v1[1]*v2[1]+v1[2]*v2[2];
 }
@@ -74,10 +141,10 @@ double dprod(signed char v1[], signed char v2[]){
 
 void setQDs(){
     srand((unsigned) time(NULL));
-    double energy_mu=2.255; //1240/.55
+    double energy_mu=2.25; //1240/.55
     double energy_sigma=.030;
     double theta=0;
-    double phi=0;
+    double d_z=0;
 
     vector<double> dix; // unit vector of the dipole * 100
     vector<double> diy; // unit vector of the dipole * 100
@@ -90,11 +157,11 @@ void setQDs(){
     // Fill the 3D array with random values from the normal distribution
     for (uint32_t i = 0; i < Np; ++i) {
         energies.push_back(e_dist(generator_e));
-        theta = 3.14159*(rand() % 360)/180;
-        phi = 3.14159*(rand() % 360)/180;
-        dix.push_back(cos(theta)*sin(phi));
-        diy.push_back(sin(theta)*sin(phi));
-        diz.push_back(cos(phi));
+        theta = 3.14159*(rand() % 3600)/1800.0;
+        d_z = (rand() % 10000 - 5000.0)/5000.0;
+        dix.push_back(cos(theta)*sqrt(1-pow(d_z,2)));
+        diy.push_back(sin(theta)*sqrt(1-pow(d_z,2)));
+        diz.push_back(d_z);
     }
 
     double kappa;
@@ -111,13 +178,13 @@ void setQDs(){
         rates_i[12]=1;
         E_d=energies[id];
         r_d[0]=qdx[id]; r_d[1]=qdy[id]; r_d[2]=qdz[id];
-        mu_d[0]=dix[id]; mu_d[1]=dix[id]; mu_d[2]=dix[id];
+        mu_d[0]=dix[id]; mu_d[1]=diy[id]; mu_d[2]=diz[id];
         for(uint32_t j=0;j<12;j++){
             if(j>=nns[id].size()){/*cout<<"not 12 nns\n"; */j=12; continue;}
             uint32_t ia=nns[id][j];
             E_a=energies[ia];
             r_a[0]=qdx[ia]; r_a[1]=qdy[ia]; r_a[2]=qdz[ia];
-            mu_a[0]=dix[ia]; mu_a[1]=dix[ia]; mu_a[2]=dix[ia];
+            mu_a[0]=dix[ia]; mu_a[1]=diy[ia]; mu_a[2]=diz[ia];
 
             d_da[0]=r_a[0]-r_d[0]; d_da[1]=r_a[1]-r_d[1]; d_da[2]=r_a[2]-r_d[2];
             d_da_mag=d_da[0]*d_da[0]+d_da[1]*d_da[1]+d_da[2]*d_da[2];
@@ -127,21 +194,18 @@ void setQDs(){
             rates_i[j]=FRET_scaling*kappa*kappa*exp(-pow(E_d-E_a-delta_ss,2)/FRET_denom)/pow(.5*(E_d+E_a-delta_ss),4);
             rates_i[j]=rates_i[j]*pow(4/d_da_mag,3);
             rates_i[12]+=rates_i[j];
-            //cout<<id<<" ("<<E_d<<") -> "<<ia<<" ("<<E_a<<") | rate = "<<rates_i[j]<<", kappa = "<<kappa<<", d = "<<d_da_mag<<"\n";
+            //if(d_da_mag<5)
+            //    cout<<" - "<<id<<" ("<<E_d<<") -> "<<ia<<" ("<<E_a<<") | rate = "<<rates_i[j]<<", kappa = "<<kappa<<", d = "<<d_da_mag<<"\n";
             //cout<<" | d_da = ("<<d_da[0]<<","<<d_da[1]<<","<<d_da[2]<<") ";
         }
         rates.push_back(rates_i);
-        //cout<<"("<<x<<","<<y<<","<<z<<") E = "<<E_d<<", total rate = "<<rates[x][y][z][12]<<"\n";
+        //cout<<id<<", E = "<<E_d<<", total rate = "<<rates[id][12]<<"\n";
     }
 
 }
 
 vector<vector<uint32_t>> apd;
 
-uint16_t energy_resolution=200; // number of pixels on energy axis
-double energy_min=2.15;
-double energy_span=.25;
-double energy_step=energy_span/energy_resolution;
 
 uint16_t time_resolution=300; // number of pixels on time axis
 double time_max=8;
@@ -296,6 +360,7 @@ void readCSV(const string& filename, vector<double>& x, vector<double>& y, vecto
 int main(/*int argc=0, char** argv=nullptr*/){
     srand((unsigned) time(NULL));
     std::string filename = "dots_z2044_p825_w180_g2_c990.csv"; // Replace with your CSV file path
+    //std::string filename = "dots_z1998_p0_w90_g2_c999.csv"; // Replace with your CSV file path
     readCSV(filename, qdx, qdy, qdz, true,-180+3);
     cout<<" box size is "<<Lbox<<" \n";
     setQDs();
@@ -315,7 +380,7 @@ int main(/*int argc=0, char** argv=nullptr*/){
     int w_edge=10;
     if(width<w_edge*2+2){cout<<"increase width\n"; return 0;}
     cout<<"num layers = "<<num_layers<<"\n";
-    uint32_t num_iters=3000000;
+    uint32_t num_iters=1000000;
     for(uint32_t iter=0; iter<num_iters; iter++){
         uint32_t i = (uint32_t)(rand()%Np);
         if(abs(qdx[i])+w_edge>Lbox){iter--; continue;}
@@ -326,7 +391,12 @@ int main(/*int argc=0, char** argv=nullptr*/){
     }
     double avg_hops=((double)hops)/num_iters;
     cout<<"avg hops per excitation : "<<avg_hops<<"\n";
-    string name="APD_L"+to_string(Lbox)+"_d"+to_string(int(round(num_layers*100)))+"_C"+to_string(int(FRET_scaling))+".csv";
-    save_as_csv(apd, name);
+    string name="L"+to_string(Lbox)+"_d"+to_string(int(round(num_layers*100)))+"_C"+to_string(int(FRET_scaling))+".csv";
+    string name1="APD_"+name;
+    string name2="rates_"+name;
+    string name3="E_rates_"+name;
+    save_as_csv(apd,name1);
+    save_dots_as_csv(name2);
+    save_energy_rates(name3);
     return 0;
 }
