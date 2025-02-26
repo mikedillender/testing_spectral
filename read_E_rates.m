@@ -12,14 +12,15 @@ y = 2.13+(0:nCols-1) * yBinSize; % x-axis values
 
 % Display the image with specified axes
 figure();
-data1(data1<0)=-.01;
+data1=data1/((2.0/3)*100);
+data1(data1<0)=-.001;
 imagesc(x,y,data1);
 myColorMap = parula(256);
 myColorMap(1,:) = 1;
 colormap(myColorMap);
 colorbar; axis on; hold on;
 set(gca,'YDir','normal');
-clim([-.01,.4])
+clim([-.001,.048])
 title("Average Transfer Rates from Simulation")
 ylabel("E_A [eV]");xlabel("E_D [mV]");
 %{

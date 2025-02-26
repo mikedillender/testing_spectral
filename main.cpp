@@ -27,10 +27,11 @@
 using namespace std;
 
 const uint16_t width=300;
-const double lifetime=1;
+const double rad_lifetime=1;
+double rad_rate = 1/rad_lifetime;
 double FRET_denom= 4*(.023*.023);// = 4 sigma^2
 double delta_ss=.038;
-double FRET_scaling = 100; // (C/dij^6)
+double FRET_scaling = 30; // (C/dij^6)
 double top_density=1;
 
 double num_layers=0;
@@ -66,6 +67,7 @@ vector<vector<uint32_t>> nns;
 uint32_t Np=0;
 uint32_t Lbox=0;
 std::vector<double> qdx, qdy, qdz;
+double avg_nr=0;
 
 
 void save_dots_as_csv(const std::string& filename) {
@@ -80,8 +82,12 @@ void save_dots_as_csv(const std::string& filename) {
         if(abs(qdy[i])+w_edge>Lbox){i++; continue;}
         file<<qdz[i]<<",";
         file<<energies[i]<<",";
-        for (size_t r = 0; r < 13; ++r) {
-            file << rates[i][r]; // Write the value
+        file << rates[i][13]<<","<< rates[i][12]<<",";
+        for (size_t r = 0; r < 12; ++r) {
+
+            double d_da=(qdx[i]-qdx[j])*(qdx[i]-qdx[j])+(qdy[i]-qdy[j])*(qdy[i]-qdy[j])+(qdz[i]-qdz[j])*(qdz[i]-qdz[j]);
+            double rate=rates[i][r]/pow(4/d_da_mag,3);
+            file << rate<<","; // Write the value
         }
         file << "\n"; // End the row
     }
@@ -101,22 +107,29 @@ void save_energy_rates(const std::string& filename) {
     vector<vector<double>> Erates=vector<vector<double>>(E_res,vector<double>(E_res,-.0001));
     vector<vector<uint32_t>> points=vector<vector<uint32_t>>(E_res,vector<uint32_t>(E_res,0));
     size_t max_size=12;
+    double average_distance=0;
+    uint32_t num_distances=0;
     for (uint32_t i=0; i<Np; i++) {
         uint32_t ei=(uint32_t)floor((energies[i]-energy_min)/en_step);
-        if(ei>E_res){continue;}
+        if(ei>=E_res){continue;}
         size_t num_nns=min(nns[i].size(),max_size);
+
         for(size_t nn_i=0; nn_i<num_nns; nn_i++){
             //if(j>=nns[id].size()){/*cout<<"not 12 nns\n"; */j=12; continue;}
             uint32_t j=nns[i][nn_i];
             double d_da=(qdx[i]-qdx[j])*(qdx[i]-qdx[j])+(qdy[i]-qdy[j])*(qdy[i]-qdy[j])+(qdz[i]-qdz[j])*(qdz[i]-qdz[j]);
-            if(d_da<6){continue;}
+            if(d_da>6){continue;}
+            average_distance+=d_da;
+            num_distances++;
             uint32_t ej=(uint32_t)floor((energies[j]-energy_min)/en_step);
-            if(ej>E_res){continue;}
+            if(ej>=E_res){continue;}
             Erates[ei][ej]=(Erates[ei][ej]*points[ei][ej]+rates[i][nn_i])/(points[ei][ej]+1);
             points[ei][ej]++;
         }
 
+
     }
+    std::cout << "compiled rate matrix, avg dist = "<<average_distance <<", "<<average_distance/num_distances<< std::endl;
 
     for (uint32_t i=0; i<E_res; i++) {
         for (uint32_t j = 0; j <E_res; j++) {
@@ -153,6 +166,7 @@ void setQDs(){
     random_device rd_e;  // Seed
     mt19937 generator_e(rd_e());  // Random number generator
     normal_distribution<double> e_dist(energy_mu, energy_sigma);
+    exponential_distribution<> exp_nr(10/rad_rate);
 
     // Fill the 3D array with random values from the normal distribution
     for (uint32_t i = 0; i < Np; ++i) {
@@ -174,8 +188,14 @@ void setQDs(){
     double d_da[3]={};
     double d_da_mag;
     for(uint32_t id=0; id<Np; id++){
-        vector<double> rates_i=vector<double>(13,0);
-        rates_i[12]=1;
+        vector<double> rates_i=vector<double>(14,0);
+
+        rates_i[13]=exp_nr(rd_e);
+        if(rand()%20==1){
+            rates_i[13]=10;
+        }
+        avg_nr+=rates_i[13];
+        rates_i[12]=1+rates_i[13];
         E_d=energies[id];
         r_d[0]=qdx[id]; r_d[1]=qdy[id]; r_d[2]=qdz[id];
         mu_d[0]=dix[id]; mu_d[1]=diy[id]; mu_d[2]=diz[id];
@@ -201,6 +221,7 @@ void setQDs(){
         rates.push_back(rates_i);
         //cout<<id<<", E = "<<E_d<<", total rate = "<<rates[id][12]<<"\n";
     }
+    avg_nr=avg_nr/Np;
 
 }
 
@@ -211,13 +232,12 @@ uint16_t time_resolution=300; // number of pixels on time axis
 double time_max=8;
 double time_step=time_max/time_resolution;
 
-double base_rate = 1/lifetime;
 random_device rd;
 mt19937 rand_gen (rd ());
-exponential_distribution<> exp_dist(base_rate);
+exponential_distribution<> exp_dist(rad_rate);
 
 void sim_particle(uint32_t i, double t){
-    double transfer_time=exp_dist(rd)/rates[i][12]; //should be base_rate/rates[x][y][z], but rates[][][] is already normalized by base rate
+    double transfer_time=exp_dist(rd)/rates[i][12]; //should be rad_rate/rates[x][y][z], but rates[][][] is already normalized by base rate
     double trans_rand=((double)rand()/(double)RAND_MAX)*rates[i][12];// decides how it decays, either FRET or radiative
     //cout<<trans_rand<<"\n";
     if(trans_rand<1){
@@ -232,8 +252,10 @@ void sim_particle(uint32_t i, double t){
            //cout<<e_bin<<", "<<t_bin<<" out of range\n";
         }
         return;
+    }else if(trans_rand<1+rates[i][13]){
+        return;
     }else{
-        double cumul_rate=1;
+        double cumul_rate=1+rates[i][13];
         uint16_t d=0;
         for (; d<12; d++){
             cumul_rate += rates[i][d];
@@ -340,13 +362,13 @@ void readCSV(const string& filename, vector<double>& x, vector<double>& y, vecto
                 nns.erase(nns.begin()+i);
             }
         }
-        for(uint32_t i=0; i<100; i++) {
+        /*for(uint32_t i=0; i<100; i++) {
             cout<<i<<" : "<<x[i]<<", "<<y[i]<<","<<z[i]<<" : ";
             for(uint32_t j : nns[i]){
                 cout<<j<<", ";
             }
             cout<<"\n";
-        }
+        }*/
         cout<<" kept "<<kept<<"/"<<Np<<" \n";
         Np=kept;
     }
@@ -359,9 +381,9 @@ void readCSV(const string& filename, vector<double>& x, vector<double>& y, vecto
 }
 int main(/*int argc=0, char** argv=nullptr*/){
     srand((unsigned) time(NULL));
-    std::string filename = "dots_z2044_p825_w180_g2_c990.csv"; // Replace with your CSV file path
+    std::string filename = "dots_z2011_p835_w180_g2_c990.csv"; // Replace with your CSV file path
     //std::string filename = "dots_z1998_p0_w90_g2_c999.csv"; // Replace with your CSV file path
-    readCSV(filename, qdx, qdy, qdz, true,-180+3);
+    readCSV(filename, qdx, qdy, qdz, false,-180+3);
     cout<<" box size is "<<Lbox<<" \n";
     setQDs();
 
@@ -380,7 +402,7 @@ int main(/*int argc=0, char** argv=nullptr*/){
     int w_edge=10;
     if(width<w_edge*2+2){cout<<"increase width\n"; return 0;}
     cout<<"num layers = "<<num_layers<<"\n";
-    uint32_t num_iters=1000000;
+    uint32_t num_iters=3000000;
     for(uint32_t iter=0; iter<num_iters; iter++){
         uint32_t i = (uint32_t)(rand()%Np);
         if(abs(qdx[i])+w_edge>Lbox){iter--; continue;}
@@ -391,7 +413,7 @@ int main(/*int argc=0, char** argv=nullptr*/){
     }
     double avg_hops=((double)hops)/num_iters;
     cout<<"avg hops per excitation : "<<avg_hops<<"\n";
-    string name="L"+to_string(Lbox)+"_d"+to_string(int(round(num_layers*100)))+"_C"+to_string(int(FRET_scaling))+".csv";
+    string name="L"+to_string(Lbox)+"_d"+to_string(int(round(num_layers*100)))+"_C"+to_string(int(FRET_scaling))+"_nr"+to_string(int(round(avg_nr*10)))+".csv";
     string name1="APD_"+name;
     string name2="rates_"+name;
     string name3="E_rates_"+name;

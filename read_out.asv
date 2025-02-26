@@ -2,7 +2,7 @@ clear; close all;
 xBinSize = 0.25/200; % Size of each bin along the x-axis
 yBinSize = 8/300; % Size of each bin along the y-axis
 
-csvFile = 'APD_L180_d175_C30_nr6.csv'; 
+csvFile = 'APD_L180_d175_C90_nr6.csv'; 
 data1 = csvread(csvFile);
 
 % Compute the x and y axis ranges
@@ -24,13 +24,12 @@ axis on; hold on;
 medianXIndices = zeros(nRows, 1); % Preallocate array for median x indices
 
 for i = 1:nRows
-    %medianXIndices(i) = find(cumsum(data1(i, :)) >= sum(data1(i, :)) / 2, 1);
-    medianXIndices(i) = sum(data1(i, :).*x)/sum(data1(i, :));
+    medianXIndices(i) = find(cumsum(data1(i, :)) >= sum(data1(i, :)) / 2, 1);
 end
 
 % Prepare the x and y coordinates for the line
-%xCoords = 2.15+(medianXIndices - 1) * xBinSize; % Convert indices to x-axis values
-xCoords=medianXIndices;
+xCoords = 2.15+(medianXIndices - 1) * xBinSize; % Convert indices to x-axis values
+xCoords = sum
 % Plot the line on top of the image
 plot(xCoords, y, 'r', 'LineWidth', 1); % Red line with thickness 2
 title("1 Layers",'FontSize',18);
@@ -47,17 +46,15 @@ xlim([2.18 2.33]);
 set(gcf, 'Position', [100, 100, 1000, 600]); % [x, y, width, height]
 
 %%  part 2
-csvFile2 = 'APD_L180_d201_C30_nr6.csv'; 
+csvFile2 = 'APD_L180_d201_C90_nr6.csv'; 
 data2 = csvread(csvFile2);
 subplot(1,2,2);
 
 medianXIndices2 = zeros(nRows, 1); % Preallocate array for median x indices
 for i = 1:nRows
-    %medianXIndices2(i) = find(cumsum(data2(i, :)) >= sum(data2(i, :)) / 2, 1);
-    medianXIndices2(i) = sum(data2(i, :).*x)/sum(data2(i, :));
+    medianXIndices2(i) = find(cumsum(data2(i, :)) >= sum(data2(i, :)) / 2, 1);
 end
-%xCoords2 = 2.15+(medianXIndices2 - 1) * xBinSize; % Convert indices to x-axis values
-xCoords2=medianXIndices2;
+xCoords2 = 2.15+(medianXIndices2 - 1) * xBinSize; % Convert indices to x-axis values
 subplot(1,2,2);
 
 imshow(data2, [], 'XData', x, 'YData', y);
